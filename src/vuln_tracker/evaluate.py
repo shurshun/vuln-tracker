@@ -7,11 +7,11 @@ from fnmatch import fnmatchcase
 import psycopg
 
 from . import argocd, vm
-from .config import Settings
+from .config import Ownership, Settings
 from .db import set_checkpoint
 from .gitlab import GitLab
 from .inventory import LiveContainer, owner_map, resolve
-from .status import decide
+from .status import IGNORED, Decision, decide
 
 log = logging.getLogger(__name__)
 
@@ -32,9 +32,16 @@ def live_containers(cluster: str, url: str) -> list[LiveContainer]:
     )
 
 
-def owner_of(c: LiveContainer, owners: list[tuple[str, str]]) -> str | None:
-    workload = f"{c.namespace}/{c.workload_kind}/{c.workload_name}"
-    return next((app for pattern, app in owners if fnmatchcase(workload, pattern)), None)
+def workload_of(c: LiveContainer) -> str:
+    return f"{c.namespace}/{c.workload_kind}/{c.workload_name}"
+
+
+def owner_of(c: LiveContainer, ownership: Ownership) -> str | None:
+    return next((app for pattern, app in ownership.owners if fnmatchcase(workload_of(c), pattern)), None)
+
+
+def is_ignored(c: LiveContainer, ownership: Ownership) -> bool:
+    return any(fnmatchcase(workload_of(c), pattern) for pattern in ownership.ignore)
 
 
 def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
@@ -74,13 +81,18 @@ def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
         conn.execute("delete from live_containers")
         for c in live:
             app = apps.get((c.cluster, c.namespace, c.workload_kind, c.workload_name)) \
-                or owner_of(c, settings.owners)
-            conn.execute(
-                "insert into live_containers (cluster, namespace, container, image, report_key, "
-                "workload_kind, workload_name, app, has_report) "
-                "values (%s, %s, %s, %s, %s, %s, %s, %s, %s) on conflict (report_key) do nothing",
-                (c.cluster, c.namespace, c.container, c.image, c.report_key, c.workload_kind,
-                 c.workload_name, app, c.report_key in reported))
+                or owner_of(c, settings.ownership)
+
+            # Ignored workloads keep their statuses, so they never count as
+            # resolved, but stay out of live_containers, metrics and the digest.
+            ignored = is_ignored(c, settings.ownership)
+            if not ignored:
+                conn.execute(
+                    "insert into live_containers (cluster, namespace, container, image, report_key, "
+                    "workload_kind, workload_name, app, has_report) "
+                    "values (%s, %s, %s, %s, %s, %s, %s, %s, %s) on conflict (report_key) do nothing",
+                    (c.cluster, c.namespace, c.container, c.image, c.report_key, c.workload_kind,
+                     c.workload_name, app, c.report_key in reported))
 
             for vuln_id, pkg, installed, fixed, severity, title, link in findings.get(c.report_key, []):
                 pk = (c.cluster, c.namespace, c.workload_kind, c.workload_name, c.container, vuln_id, pkg)
@@ -88,11 +100,12 @@ def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
                     continue
                 seen.add(pk)
                 since = first_seen.get(pk, now)
-                d = decide(cluster=c.cluster, app=app, vuln_id=vuln_id, pkg=pkg, severity=severity,
-                           first_seen=since, now=now, exceptions=exceptions,
-                           mrs=mrs.get(app, []) if app else [], fixed_by=fixed_by,
-                           diffed=set(fixed_by), tracked_apps=tracked, sla=settings.critical_sla,
-                           managed_apps=settings.managed_apps)
+                d = Decision(IGNORED) if ignored else decide(
+                    cluster=c.cluster, app=app, vuln_id=vuln_id, pkg=pkg, severity=severity,
+                    first_seen=since, now=now, exceptions=exceptions,
+                    mrs=mrs.get(app, []) if app else [], fixed_by=fixed_by,
+                    diffed=set(fixed_by), tracked_apps=tracked, sla=settings.critical_sla,
+                    managed_apps=settings.ownership.managed)
                 conn.execute(
                     """
                     insert into statuses (cluster, namespace, workload_kind, workload_name, container,
@@ -118,5 +131,7 @@ def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
                 "and vuln_id = %s and pkg = %s", [(now, *pk) for pk in gone])
         set_checkpoint(conn, "success:evaluate", now)
 
-    log.info("evaluate: %d live containers, %d without report, %d open findings, %d resolved",
-             len(live), sum(1 for c in live if c.report_key not in reported), len(seen), len(gone))
+    counted = [c for c in live if not is_ignored(c, settings.ownership)]
+    log.info("evaluate: %d live containers (%d ignored), %d without report, %d open findings, %d resolved",
+             len(counted), len(live) - len(counted), sum(1 for c in counted if c.report_key not in reported),
+             len(seen), len(gone))

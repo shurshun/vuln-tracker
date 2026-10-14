@@ -1,7 +1,7 @@
 import re
 from datetime import UTC, date, datetime, timedelta
 
-from vuln_tracker import argocd, digest, evaluate, gitlab, inventory, reports, rescan
+from vuln_tracker import argocd, config, digest, evaluate, gitlab, inventory, reports, rescan
 from vuln_tracker.config import Settings
 from vuln_tracker.status import (
     ACCEPTED,
@@ -170,18 +170,33 @@ def test_settings_strip_tokens(monkeypatch):
     assert (s.argocd_token, s.gitlab_token, s.slack_token) == ("secret", "secret", "secret")
 
 
-def test_owners_and_managed_apps(monkeypatch):
+def test_ownership_config(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("""
+owners:
+  - match: "team-a/*/*"
+    app: billing
+managed: [billing]
+ignore:
+  - "infra/DaemonSet/node-agent-*"
+""")
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
-    monkeypatch.setenv("OWNERS", "argocd/*/*=argocd,kube-system/*/efs-csi-*=aws-efs-csi-driver")
-    monkeypatch.setenv("MANAGED_APPS", "argocd,aws-efs-csi-driver")
-    s = Settings.from_env()
+    monkeypatch.setenv("CONFIG_FILE", str(cfg))
+    o = Settings.from_env().ownership
 
     def live(ns, kind, name):
-        return inventory.LiveContainer("mgmt", ns, "c", "img", kind, name, kind, name)
+        return inventory.LiveContainer("dev", ns, "c", "img", kind, name, kind, name)
 
-    assert evaluate.owner_of(live("argocd", "StatefulSet", "argocd-application-controller"), s.owners) == "argocd"
-    assert evaluate.owner_of(live("kube-system", "DaemonSet", "efs-csi-node"), s.owners) == "aws-efs-csi-driver"
-    assert evaluate.owner_of(live("kube-system", "Deployment", "dex"), s.owners) is None
-    assert status(app="argocd", managed_apps=s.managed_apps) == MANAGED
-    assert status(app="argocd", managed_apps=s.managed_apps, severity="CRITICAL",
+    assert evaluate.owner_of(live("team-a", "Deployment", "api"), o) == "billing"
+    assert evaluate.owner_of(live("team-b", "Deployment", "api"), o) is None
+    assert evaluate.is_ignored(live("infra", "DaemonSet", "node-agent-x"), o)
+    assert not evaluate.is_ignored(live("infra", "Deployment", "node-agent-x"), o)
+    assert status(app="billing", managed_apps=o.managed) == MANAGED
+    assert status(app="billing", managed_apps=o.managed, severity="CRITICAL",
                   first_seen=NOW - timedelta(days=30)) == OVERDUE
+
+
+def test_ownership_without_config(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    monkeypatch.delenv("CONFIG_FILE", raising=False)
+    assert Settings.from_env().ownership == config.Ownership()

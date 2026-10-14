@@ -1,15 +1,33 @@
-"""Settings from the environment."""
+"""Settings from the environment and the optional YAML config file."""
 
 import os
 import re
 from dataclasses import dataclass
 from datetime import timedelta
 
+import yaml
 
-def _owners(value: str) -> list[tuple[str, str]]:
-    """"argocd/*/*=argocd,kube-system/*/metrics-server=metrics-server" →
-    [("argocd/*/*", "argocd"), ...]: fnmatch patterns over namespace/kind/name."""
-    return [tuple(item.split("=", 1)) for item in value.split(",") if item]
+
+@dataclass(frozen=True)
+class Ownership:
+    """Workload rules from CONFIG_FILE. Patterns are fnmatch over
+    namespace/kind/name, and the first matching owner wins."""
+
+    owners: tuple[tuple[str, str], ...] = ()
+    managed: frozenset[str] = frozenset()
+    ignore: tuple[str, ...] = ()
+
+    @classmethod
+    def load(cls, path: str) -> "Ownership":
+        if not path:
+            return cls()
+        with open(path) as f:
+            doc = yaml.safe_load(f) or {}
+        return cls(
+            owners=tuple((o["match"], o["app"]) for o in doc.get("owners") or []),
+            managed=frozenset(doc.get("managed") or []),
+            ignore=tuple(doc.get("ignore") or []),
+        )
 
 
 def _pairs(value: str) -> dict[str, str]:
@@ -37,10 +55,7 @@ class Settings:
     argocd_cluster_pattern: re.Pattern | None
     argocd_in_cluster: str
 
-    # Owners of workloads outside ArgoCD, and apps released outside the helm
-    # repo (ArgoCD itself, cloud add-ons) that Renovate MRs never fix.
-    owners: list[tuple[str, str]]
-    managed_apps: frozenset[str]
+    ownership: Ownership
 
     slack_token: str
     slack_channel: str
@@ -66,8 +81,7 @@ class Settings:
             argocd_token=env.get("ARGOCD_TOKEN", "").strip(),
             argocd_cluster_pattern=re.compile(p) if (p := env.get("ARGOCD_CLUSTER_PATTERN")) else None,
             argocd_in_cluster=env.get("ARGOCD_IN_CLUSTER", "in-cluster"),
-            owners=_owners(env.get("OWNERS", "")),
-            managed_apps=frozenset(a for a in env.get("MANAGED_APPS", "").split(",") if a),
+            ownership=Ownership.load(env.get("CONFIG_FILE", "")),
             slack_token=env.get("SLACK_TOKEN", "").strip(),
             slack_channel=env.get("SLACK_CHANNEL", ""),
             grafana_url=env.get("GRAFANA_URL", ""),

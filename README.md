@@ -31,8 +31,9 @@ gone ReplicaSet never counts.
 | `mr-unverified` | open MR without a verdict yet |
 | `no-fix` | Renovate tracks the app, no MR is open: no newer version |
 | `renovate-gap` | Renovate detects no dependency of the app |
-| `managed` | app is in `MANAGED_APPS`: released outside the helm repo, no Renovate MR fixes it |
-| `unowned` | workload is neither in an ArgoCD application nor in `OWNERS` |
+| `managed` | app is under `managed` in the config: released outside the helm repo, no Renovate MR fixes it |
+| `ignored` | workload matches `ignore` in the config: kept in the database, left out of metrics and the digest |
+| `unowned` | workload is neither in an ArgoCD application nor under `owners` in the config |
 | `overdue` | CRITICAL open longer than `CRITICAL_SLA_DAYS` and not accepted |
 
 Apps map to MRs by branch: Renovate names them `renovate/<app>/...`.
@@ -49,13 +50,27 @@ Apps map to MRs by branch: Renovate names them `renovate/<app>/...`.
 | `ARGOCD_CLUSTER_PATTERN` | `example-(?P<env>[a-z0-9]+)-eks`: the `env` group names the cluster; unset uses the destination name |
 | `ARGOCD_IN_CLUSTER` | `mgmt`: name of ArgoCD's own cluster, default `in-cluster` |
 | `SLACK_TOKEN`, `SLACK_CHANNEL` | bot token, `#security` |
-| `OWNERS` | `argocd/*/*=argocd,kube-system/*/metrics-server=metrics-server`: owner of a workload outside ArgoCD, fnmatch over `namespace/kind/name` |
-| `MANAGED_APPS` | `argocd,metrics-server`: apps whose findings get `managed` |
+| `CONFIG_FILE` | `/etc/vuln-tracker/config.yaml`, optional, see below |
 | `GRAFANA_URL` | dashboard link for the digest |
 | `CRITICAL_SLA_DAYS` | `7` |
 
 GitLab, ArgoCD and Slack are optional: without them statuses stop at `unowned`
 or `renovate-gap` and the digest is not sent.
+
+## Config file
+
+Workload rules that ArgoCD cannot tell. Patterns are fnmatch over
+`namespace/kind/name`; the first matching owner wins.
+
+```yaml
+owners:            # owner of a workload outside ArgoCD
+  - match: "team-a/*/*"
+    app: billing
+managed:           # apps released outside the helm repo
+  - billing
+ignore:            # workloads whose findings nobody acts on
+  - "infra/DaemonSet/node-agent-*"
+```
 
 ## Development
 

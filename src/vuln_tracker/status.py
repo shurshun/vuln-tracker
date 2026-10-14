@@ -12,6 +12,7 @@ RENOVATE_GAP = "renovate-gap"
 UNOWNED = "unowned"
 OVERDUE = "overdue"
 MANAGED = "managed"
+IGNORED = "ignored"
 
 
 @dataclass(frozen=True)
