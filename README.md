@@ -31,7 +31,8 @@ gone ReplicaSet never counts.
 | `mr-unverified` | open MR without a verdict yet |
 | `no-fix` | Renovate tracks the app, no MR is open: no newer version |
 | `renovate-gap` | Renovate detects no dependency of the app |
-| `unowned` | workload is not part of an ArgoCD application |
+| `managed` | app is in `MANAGED_APPS`: released outside the helm repo, no Renovate MR fixes it |
+| `unowned` | workload is neither in an ArgoCD application nor in `OWNERS` |
 | `overdue` | CRITICAL open longer than `CRITICAL_SLA_DAYS` and not accepted |
 
 Apps map to MRs by branch: Renovate names them `renovate/<app>/...`.
@@ -48,6 +49,8 @@ Apps map to MRs by branch: Renovate names them `renovate/<app>/...`.
 | `ARGOCD_CLUSTER_PATTERN` | `example-(?P<env>[a-z0-9]+)-eks`: the `env` group names the cluster; unset uses the destination name |
 | `ARGOCD_IN_CLUSTER` | `mgmt`: name of ArgoCD's own cluster, default `in-cluster` |
 | `SLACK_TOKEN`, `SLACK_CHANNEL` | bot token, `#security` |
+| `OWNERS` | `argocd/*/*=argocd,kube-system/*/metrics-server=metrics-server`: owner of a workload outside ArgoCD, fnmatch over `namespace/kind/name` |
+| `MANAGED_APPS` | `argocd,metrics-server`: apps whose findings get `managed` |
 | `GRAFANA_URL` | dashboard link for the digest |
 | `CRITICAL_SLA_DAYS` | `7` |
 

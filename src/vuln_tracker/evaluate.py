@@ -2,6 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
+from fnmatch import fnmatchcase
 
 import psycopg
 
@@ -29,6 +30,11 @@ def live_containers(cluster: str, url: str) -> list[LiveContainer]:
         owner_map(vm.query(url, "kube_replicaset_owner"), "replicaset"),
         owner_map(vm.query(url, "kube_job_owner"), "job_name"),
     )
+
+
+def owner_of(c: LiveContainer, owners: list[tuple[str, str]]) -> str | None:
+    workload = f"{c.namespace}/{c.workload_kind}/{c.workload_name}"
+    return next((app for pattern, app in owners if fnmatchcase(workload, pattern)), None)
 
 
 def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
@@ -67,7 +73,8 @@ def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
     with conn.transaction():
         conn.execute("delete from live_containers")
         for c in live:
-            app = apps.get((c.cluster, c.namespace, c.workload_kind, c.workload_name))
+            app = apps.get((c.cluster, c.namespace, c.workload_kind, c.workload_name)) \
+                or owner_of(c, settings.owners)
             conn.execute(
                 "insert into live_containers (cluster, namespace, container, image, report_key, "
                 "workload_kind, workload_name, app, has_report) "
@@ -84,7 +91,8 @@ def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
                 d = decide(cluster=c.cluster, app=app, vuln_id=vuln_id, pkg=pkg, severity=severity,
                            first_seen=since, now=now, exceptions=exceptions,
                            mrs=mrs.get(app, []) if app else [], fixed_by=fixed_by,
-                           diffed=set(fixed_by), tracked_apps=tracked, sla=settings.critical_sla)
+                           diffed=set(fixed_by), tracked_apps=tracked, sla=settings.critical_sla,
+                           managed_apps=settings.managed_apps)
                 conn.execute(
                     """
                     insert into statuses (cluster, namespace, workload_kind, workload_name, container,

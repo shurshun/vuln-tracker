@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 
+def _owners(value: str) -> list[tuple[str, str]]:
+    """"argocd/*/*=argocd,kube-system/*/metrics-server=metrics-server" →
+    [("argocd/*/*", "argocd"), ...]: fnmatch patterns over namespace/kind/name."""
+    return [tuple(item.split("=", 1)) for item in value.split(",") if item]
+
+
 def _pairs(value: str) -> dict[str, str]:
     """"mgmt=http://a,qa=http://b" → {"mgmt": "http://a", "qa": "http://b"}."""
     return dict(item.split("=", 1) for item in value.split(",") if item)
@@ -31,6 +37,11 @@ class Settings:
     argocd_cluster_pattern: re.Pattern | None
     argocd_in_cluster: str
 
+    # Owners of workloads outside ArgoCD, and apps released outside the helm
+    # repo (ArgoCD itself, cloud add-ons) that Renovate MRs never fix.
+    owners: list[tuple[str, str]]
+    managed_apps: frozenset[str]
+
     slack_token: str
     slack_channel: str
     grafana_url: str
@@ -55,6 +66,8 @@ class Settings:
             argocd_token=env.get("ARGOCD_TOKEN", "").strip(),
             argocd_cluster_pattern=re.compile(p) if (p := env.get("ARGOCD_CLUSTER_PATTERN")) else None,
             argocd_in_cluster=env.get("ARGOCD_IN_CLUSTER", "in-cluster"),
+            owners=_owners(env.get("OWNERS", "")),
+            managed_apps=frozenset(a for a in env.get("MANAGED_APPS", "").split(",") if a),
             slack_token=env.get("SLACK_TOKEN", "").strip(),
             slack_channel=env.get("SLACK_CHANNEL", ""),
             grafana_url=env.get("GRAFANA_URL", ""),
