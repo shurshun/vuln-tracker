@@ -1,6 +1,6 @@
 FROM public.ecr.aws/aquasecurity/trivy:0.75.0 AS trivy
 
-FROM ghcr.io/astral-sh/uv:0.12.24 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.1 AS uv
 
 FROM public.ecr.aws/docker/library/python:3.13-slim-trixie AS build
 COPY --from=uv /uv /usr/local/bin/uv
