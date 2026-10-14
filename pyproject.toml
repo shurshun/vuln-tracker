@@ -1,6 +1,6 @@
 [project]
 name = "vuln-tracker"
-version = "0.1.0"
+version = "0.1.1"
 description = "Turns trivy-operator reports in S3 into vulnerability statuses, metrics and Slack digests"
 requires-python = ">=3.13"
 dependencies = [
