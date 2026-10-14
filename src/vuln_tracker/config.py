@@ -39,6 +39,8 @@ class Settings:
     trivy_db_repository: str
     trivy_cache_dir: str
 
+    # A trailing newline from a secret store breaks the HTTP header and leaks
+    # the token into the error message, so tokens are stripped.
     @classmethod
     def from_env(cls) -> "Settings":
         env = os.environ
@@ -47,13 +49,13 @@ class Settings:
             bucket=env.get("REPORTS_BUCKET", ""),
             clusters=_pairs(env.get("CLUSTERS", "")),
             gitlab_url=env.get("GITLAB_URL", "https://gitlab.com"),
-            gitlab_token=env.get("GITLAB_TOKEN", ""),
+            gitlab_token=env.get("GITLAB_TOKEN", "").strip(),
             helm_project=env.get("HELM_PROJECT", ""),
             argocd_url=env.get("ARGOCD_URL", ""),
-            argocd_token=env.get("ARGOCD_TOKEN", ""),
+            argocd_token=env.get("ARGOCD_TOKEN", "").strip(),
             argocd_cluster_pattern=re.compile(p) if (p := env.get("ARGOCD_CLUSTER_PATTERN")) else None,
             argocd_in_cluster=env.get("ARGOCD_IN_CLUSTER", "in-cluster"),
-            slack_token=env.get("SLACK_TOKEN", ""),
+            slack_token=env.get("SLACK_TOKEN", "").strip(),
             slack_channel=env.get("SLACK_CHANNEL", ""),
             grafana_url=env.get("GRAFANA_URL", ""),
             critical_sla=timedelta(days=int(env.get("CRITICAL_SLA_DAYS", "7"))),

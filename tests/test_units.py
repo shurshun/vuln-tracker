@@ -2,6 +2,7 @@ import re
 from datetime import UTC, date, datetime, timedelta
 
 from vuln_tracker import argocd, digest, gitlab, inventory, reports, rescan
+from vuln_tracker.config import Settings
 from vuln_tracker.status import (
     ACCEPTED,
     FIX_READY,
@@ -158,3 +159,11 @@ def test_digest_render():
     assert "grafana — <https://mr/7|!7> fixes 1 CRITICAL · 0 HIGH" in text
     assert "loki/loki CVE-2 — 9 days" in text
     assert "Containers without a report: 2" in text
+
+
+def test_settings_strip_tokens(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    for name in ("ARGOCD_TOKEN", "GITLAB_TOKEN", "SLACK_TOKEN"):
+        monkeypatch.setenv(name, "secret\n")
+    s = Settings.from_env()
+    assert (s.argocd_token, s.gitlab_token, s.slack_token) == ("secret", "secret", "secret")
