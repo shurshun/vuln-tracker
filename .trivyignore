@@ -1,0 +1,6 @@
+# Go stdlib 1.27.1 and golang.org/x/net 0.59.0 of the bundled trivy 0.75.0
+# binary. trivy 0.76.0 ships the fixes and clears the 7-day cooldown on
+# 2026-10-21; the entries expire the day after.
+CVE-2026-78667 exp:2026-10-22
+CVE-2026-78669 exp:2026-10-22
+CVE-2026-97031 exp:2026-10-22
