@@ -11,6 +11,7 @@ NO_FIX = "no-fix"
 RENOVATE_GAP = "renovate-gap"
 UNOWNED = "unowned"
 OVERDUE = "overdue"
+MANAGED = "managed"
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,7 @@ class Decision:
 def decide(*, cluster: str, app: str | None, vuln_id: str, pkg: str, severity: str,
            first_seen: datetime, now: datetime, exceptions: list[RiskException],
            mrs: list[MergeRequest], fixed_by: dict[str, set[str]], diffed: set[str],
-           tracked_apps: set[str], sla: timedelta) -> Decision:
+           tracked_apps: set[str], sla: timedelta, managed_apps: frozenset[str] = frozenset()) -> Decision:
     """
     fixed_by maps an MR branch to the vulnerability ids its security:diff
     artifact reports as fixed; diffed holds branches that have an artifact.
@@ -65,6 +66,8 @@ def decide(*, cluster: str, app: str | None, vuln_id: str, pkg: str, severity: s
 
     if app is None:
         decision = Decision(UNOWNED)
+    elif app in managed_apps:
+        decision = Decision(MANAGED)
     elif mrs:
         fixing = next((mr for mr in mrs if vuln_id in fixed_by.get(mr.branch, set())), None)
         if fixing:

@@ -1,11 +1,12 @@
 import re
 from datetime import UTC, date, datetime, timedelta
 
-from vuln_tracker import argocd, digest, gitlab, inventory, reports, rescan
+from vuln_tracker import argocd, digest, evaluate, gitlab, inventory, reports, rescan
 from vuln_tracker.config import Settings
 from vuln_tracker.status import (
     ACCEPTED,
     FIX_READY,
+    MANAGED,
     MR_UNVERIFIED,
     NO_FIX,
     OVERDUE,
@@ -167,3 +168,20 @@ def test_settings_strip_tokens(monkeypatch):
         monkeypatch.setenv(name, "secret\n")
     s = Settings.from_env()
     assert (s.argocd_token, s.gitlab_token, s.slack_token) == ("secret", "secret", "secret")
+
+
+def test_owners_and_managed_apps(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x")
+    monkeypatch.setenv("OWNERS", "argocd/*/*=argocd,kube-system/*/efs-csi-*=aws-efs-csi-driver")
+    monkeypatch.setenv("MANAGED_APPS", "argocd,aws-efs-csi-driver")
+    s = Settings.from_env()
+
+    def live(ns, kind, name):
+        return inventory.LiveContainer("mgmt", ns, "c", "img", kind, name, kind, name)
+
+    assert evaluate.owner_of(live("argocd", "StatefulSet", "argocd-application-controller"), s.owners) == "argocd"
+    assert evaluate.owner_of(live("kube-system", "DaemonSet", "efs-csi-node"), s.owners) == "aws-efs-csi-driver"
+    assert evaluate.owner_of(live("kube-system", "Deployment", "dex"), s.owners) is None
+    assert status(app="argocd", managed_apps=s.managed_apps) == MANAGED
+    assert status(app="argocd", managed_apps=s.managed_apps, severity="CRITICAL",
+                  first_seen=NOW - timedelta(days=30)) == OVERDUE

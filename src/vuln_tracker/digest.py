@@ -9,7 +9,17 @@ import psycopg
 
 from .config import Settings
 from .db import set_checkpoint
-from .status import ACCEPTED, FIX_READY, MR_UNVERIFIED, NO_FIX, OVERDUE, RENOVATE_GAP, UNOWNED, UPSTREAM_PENDING
+from .status import (
+    ACCEPTED,
+    FIX_READY,
+    MANAGED,
+    MR_UNVERIFIED,
+    NO_FIX,
+    OVERDUE,
+    RENOVATE_GAP,
+    UNOWNED,
+    UPSTREAM_PENDING,
+)
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +73,7 @@ def render(rows: list[tuple], without_report: dict[str, int], now: datetime, gra
                               (UPSTREAM_PENDING, "MR does not fix it yet"),
                               (NO_FIX, "No newer version upstream"),
                               (RENOVATE_GAP, "Not tracked by Renovate"),
+                              (MANAGED, "Released outside the helm repo"),
                               (UNOWNED, "Not an ArgoCD app")):
             if by_status[status]:
                 apps = ", ".join(f"{app} ({counts(items)})"
