@@ -22,10 +22,3 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
-    # A new Python minor is a runtime change, made by hand with .python-version
-    # and requires-python.
-    ignore:
-      - dependency-name: docker/library/python
-        update-types:
-          - version-update:semver-major
-          - version-update:semver-minor
