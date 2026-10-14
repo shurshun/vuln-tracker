@@ -27,7 +27,7 @@ QUERY = """
 select cluster, coalesce(app, namespace), workload_name, vuln_id, severity, status, mr_iid, mr_url,
        first_seen
 from statuses
-where resolved_at is null and severity in ('CRITICAL', 'HIGH')
+where resolved_at is null and severity in ('CRITICAL', 'HIGH') and status <> 'ignored'
 order by cluster, 2, severity, vuln_id
 """
 

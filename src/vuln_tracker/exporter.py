@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 FINDINGS = """
 select cluster, namespace, coalesce(app, ''), severity, status, count(*)
-from statuses where resolved_at is null
+from statuses where resolved_at is null and status <> 'ignored'
 group by 1, 2, 3, 4, 5
 """
 LIVE = "select cluster, has_report, count(*) from live_containers group by 1, 2"
