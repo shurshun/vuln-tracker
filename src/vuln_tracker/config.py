@@ -1,0 +1,63 @@
+"""Settings from the environment."""
+
+import os
+import re
+from dataclasses import dataclass
+from datetime import timedelta
+
+
+def _pairs(value: str) -> dict[str, str]:
+    """"mgmt=http://a,qa=http://b" → {"mgmt": "http://a", "qa": "http://b"}."""
+    return dict(item.split("=", 1) for item in value.split(",") if item)
+
+
+@dataclass(frozen=True)
+class Settings:
+    database_url: str
+    bucket: str
+
+    # Cluster → VictoriaMetrics query URL holding its kube-state-metrics.
+    clusters: dict[str, str]
+
+    gitlab_url: str
+    gitlab_token: str
+    helm_project: str
+
+    argocd_url: str
+    argocd_token: str
+
+    # Regex with an `env` group that names the cluster from an ArgoCD
+    # destination, and the name of ArgoCD's own cluster.
+    argocd_cluster_pattern: re.Pattern | None
+    argocd_in_cluster: str
+
+    slack_token: str
+    slack_channel: str
+    grafana_url: str
+
+    critical_sla: timedelta
+    trivy_db_repository: str
+    trivy_cache_dir: str
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        env = os.environ
+        return cls(
+            database_url=env["DATABASE_URL"],
+            bucket=env.get("REPORTS_BUCKET", ""),
+            clusters=_pairs(env.get("CLUSTERS", "")),
+            gitlab_url=env.get("GITLAB_URL", "https://gitlab.com"),
+            gitlab_token=env.get("GITLAB_TOKEN", ""),
+            helm_project=env.get("HELM_PROJECT", ""),
+            argocd_url=env.get("ARGOCD_URL", ""),
+            argocd_token=env.get("ARGOCD_TOKEN", ""),
+            argocd_cluster_pattern=re.compile(p) if (p := env.get("ARGOCD_CLUSTER_PATTERN")) else None,
+            argocd_in_cluster=env.get("ARGOCD_IN_CLUSTER", "in-cluster"),
+            slack_token=env.get("SLACK_TOKEN", ""),
+            slack_channel=env.get("SLACK_CHANNEL", ""),
+            grafana_url=env.get("GRAFANA_URL", ""),
+            critical_sla=timedelta(days=int(env.get("CRITICAL_SLA_DAYS", "7"))),
+            trivy_db_repository=env.get("TRIVY_DB_REPOSITORY",
+                                        "public.ecr.aws/aquasecurity/trivy-db"),
+            trivy_cache_dir=env.get("TRIVY_CACHE_DIR", "/tmp/trivy"),
+        )

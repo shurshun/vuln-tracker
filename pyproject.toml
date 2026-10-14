@@ -1,0 +1,32 @@
+[project]
+name = "vuln-tracker"
+version = "0.1.0"
+description = "Turns trivy-operator reports in S3 into vulnerability statuses, metrics and Slack digests"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3>=1.43.105",
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+vuln-tracker = "vuln_tracker.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
