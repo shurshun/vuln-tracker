@@ -53,6 +53,18 @@ def sbom_key(vulnerability_key: str) -> str:
     return vulnerability_key.replace("/vulnerability_reports/", "/sbom_reports/", 1)
 
 
+def components(doc: dict | list) -> list | None:
+    """CycloneDX components of a stored SBOM report. trivy-operator writes the
+    report either as an object or as a list holding one report."""
+
+    if isinstance(doc, list):
+        doc = doc[0] if doc else {}
+    try:
+        return doc["report"]["components"]
+    except (KeyError, TypeError):
+        return None
+
+
 def trivy(settings: Settings, *args: str) -> str:
     cmd = ["trivy", "--quiet", "--cache-dir", settings.trivy_cache_dir, *args]
     return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
@@ -71,8 +83,12 @@ def rescan(settings: Settings, conn: psycopg.Connection) -> None:
         doc = bucket.get_json(sbom_key(key))
         if doc is None:
             continue
+        bom_doc = components(doc)
+        if bom_doc is None:
+            log.warning("skipping unreadable SBOM report %s", sbom_key(key))
+            continue
         with tempfile.NamedTemporaryFile("w", suffix=".cdx.json") as bom:
-            json.dump(doc["report"]["components"], bom)
+            json.dump(bom_doc, bom)
             bom.flush()
             try:
                 out = trivy(settings, "sbom", "--format", "json", "--scanners", "vuln",

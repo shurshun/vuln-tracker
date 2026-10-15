@@ -218,3 +218,11 @@ def test_argocd_comparison_error_fails_the_run():
         assert "web-prod" in str(e)
     else:
         raise AssertionError("a ComparisonError in an evaluated cluster must fail the run")
+
+
+def test_rescan_reads_sbom_object_and_list():
+    report = {"metadata": {}, "report": {"components": {"bomFormat": "CycloneDX"}}}
+    assert rescan.components(report) == {"bomFormat": "CycloneDX"}
+    assert rescan.components([report]) == {"bomFormat": "CycloneDX"}
+    assert rescan.components([]) is None
+    assert rescan.components({"report": []}) is None
