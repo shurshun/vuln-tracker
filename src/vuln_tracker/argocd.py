@@ -36,8 +36,27 @@ def build_index(apps: list[dict], pattern: re.Pattern | None = None,
     return index
 
 
-def fetch_index(url: str, token: str, pattern: re.Pattern | None, in_cluster: str) -> Index:
+class ArgoCDUnavailable(RuntimeError):
+    pass
+
+
+def check_comparable(apps: list[dict], clusters: set[str], pattern: re.Pattern | None, in_cluster: str) -> None:
+    """While ArgoCD cannot compare an app it reports no resources for it, and
+    every workload of that app would turn unowned. Fail the run instead."""
+
+    broken = sorted(
+        app["metadata"]["name"] for app in apps
+        if cluster_of(app["spec"].get("destination", {}), pattern, in_cluster) in clusters
+        and any(c.get("type") == "ComparisonError" for c in app.get("status", {}).get("conditions") or []))
+    if broken:
+        raise ArgoCDUnavailable(f"ArgoCD cannot compare {len(broken)} apps: {', '.join(broken)}")
+
+
+def fetch_index(url: str, token: str, pattern: re.Pattern | None, in_cluster: str,
+                clusters: set[str]) -> Index:
     r = httpx.get(f"{url.rstrip('/')}/api/v1/applications",
                   headers={"Authorization": f"Bearer {token}"}, timeout=30)
     r.raise_for_status()
-    return build_index(r.json().get("items") or [], pattern, in_cluster)
+    apps = r.json().get("items") or []
+    check_comparable(apps, clusters, pattern, in_cluster)
+    return build_index(apps, pattern, in_cluster)

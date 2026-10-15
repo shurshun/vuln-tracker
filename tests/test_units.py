@@ -200,3 +200,21 @@ def test_ownership_without_config(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://x")
     monkeypatch.delenv("CONFIG_FILE", raising=False)
     assert Settings.from_env().ownership == config.Ownership()
+
+
+def test_argocd_comparison_error_fails_the_run():
+    def app(name, dest, conditions=()):
+        return {"metadata": {"name": name}, "spec": {"destination": {"name": dest}},
+                "status": {"conditions": list(conditions)}}
+
+    err = [{"type": "ComparisonError", "message": "failed to load open api schema"}]
+    pattern = re.compile(r"acme-(?P<env>[a-z0-9]+)-eks")
+    apps = [app("web-dev", "acme-dev-eks"), app("web-prod", "acme-prod-eks", err)]
+
+    argocd.check_comparable(apps, {"dev"}, pattern, "in-cluster")
+    try:
+        argocd.check_comparable(apps, {"dev", "prod"}, pattern, "in-cluster")
+    except argocd.ArgoCDUnavailable as e:
+        assert "web-prod" in str(e)
+    else:
+        raise AssertionError("a ComparisonError in an evaluated cluster must fail the run")

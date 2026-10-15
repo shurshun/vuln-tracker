@@ -49,7 +49,7 @@ def evaluate(settings: Settings, conn: psycopg.Connection) -> None:
 
     live = [c for cluster, url in settings.clusters.items() for c in live_containers(cluster, url)]
     apps = argocd.fetch_index(settings.argocd_url, settings.argocd_token, settings.argocd_cluster_pattern,
-                              settings.argocd_in_cluster) if settings.argocd_url else {}
+                              settings.argocd_in_cluster, set(settings.clusters)) if settings.argocd_url else {}
 
     gitlab = GitLab(settings.gitlab_url, settings.gitlab_token, settings.helm_project) \
         if settings.gitlab_token else None
