@@ -1,4 +1,4 @@
-FROM ghcr.io/aquasecurity/trivy:0.75.0 AS trivy
+FROM ghcr.io/aquasecurity/trivy:0.76.1 AS trivy
 
 FROM ghcr.io/astral-sh/uv:0.12.24-python3.13-trixie-slim AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
